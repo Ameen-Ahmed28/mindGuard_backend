@@ -90,16 +90,28 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
-        # Prevent clickjacking
-        response.headers["X-Frame-Options"] = "DENY"
+        # Prevent clickjacking (but allow for docs)
+        if not request.url.path.startswith("/docs"):
+            response.headers["X-Frame-Options"] = "DENY"
         # Prevent MIME type sniffing
         response.headers["X-Content-Type-Options"] = "nosniff"
         # XSS protection
         response.headers["X-XSS-Protection"] = "1; mode=block"
         # Referrer policy
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        # Content Security Policy
-        response.headers["Content-Security-Policy"] = "default-src 'self'"
+        # Content Security Policy - relaxed for Swagger UI docs
+        if request.url.path.startswith("/docs") or request.url.path.startswith("/redoc"):
+            # Allow Swagger UI resources
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; "
+                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                "img-src 'self' data: https://fastapi.tiangolo.com; "
+                "font-src 'self' https://cdn.jsdelivr.net;"
+            )
+        else:
+            # Strict CSP for API endpoints
+            response.headers["Content-Security-Policy"] = "default-src 'self'"
         return response
 
 
